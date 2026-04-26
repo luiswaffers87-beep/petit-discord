@@ -2,26 +2,41 @@ defmodule MiniDiscord.Salon do
   use GenServer
 
   def start_link(name) do
-    GenServer.start_link(__MODULE__, %{name: name, clients: [], historique: []},
+    GenServer.start_link(__MODULE__, %{name: name, clients: [], historique: [], password: nil},
       name: via(name))
   end
 
-  def rejoindre(salon, pid), do: GenServer.call(via(salon), {:rejoindre, pid})
+  def rejoindre(salon, pid, password \\ nil), do: GenServer.call(via(salon), {:rejoindre, pid, password})
   def quitter(salon, pid),   do: GenServer.call(via(salon), {:quitter, pid})
   def broadcast(salon, msg), do: GenServer.cast(via(salon), {:broadcast, msg})
+  def definir_password(salon, password), do: GenServer.call(via(salon), {:password, password})
+  def has_password?(salon), do: GenServer.call(via(salon), :has_password)
   def lister do
     Registry.select(MiniDiscord.Registry, [{{:"$1", :_, :_}, [], [:"$1"]}])
   end
 
   def init(state), do: {:ok, state}
 
-  def handle_call({:rejoindre, pid}, _from, state) do
-# TODO : Monitorer le pid avec Process.monitor/1
-    Process.monitor(pid)
-# TODO : Retourner {:reply, :ok, nouvel_état} avec pid ajouté à state.clients
-    nouvel_état = %{state | clients: [pid | state.clients]}
-    send(pid, {:historique, state.historique})
-    {:reply, :ok, nouvel_état}
+  def handle_call({:rejoindre, pid, password}, _from, state) do
+    # Vérifier le mot de passe si défini
+    if state.password != nil and :crypto.hash(:sha256, password || "") != state.password do
+      {:reply, {:error, :wrong_password}, state}
+    else
+      Process.monitor(pid)
+      new_state = %{state | clients: [pid | state.clients]}
+      send(pid, {:historique, state.historique})
+      {:reply, :ok, new_state}
+    end
+  end
+
+  def handle_call({:password, password}, _from, state) do
+    hashed_password = :crypto.hash(:sha256, password)
+    new_state = %{state | password: hashed_password}
+    {:reply, :ok, new_state}
+  end
+
+  def handle_call(:has_password, _from, state) do
+    {:reply, state.password != nil, state}
   end
 
   def handle_call({:quitter, pid}, _from, state) do
