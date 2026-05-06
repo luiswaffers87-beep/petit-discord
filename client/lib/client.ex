@@ -6,31 +6,41 @@ defmodule MiniDiscord.Client do
   port : entier ex: 4040
   """
   def start(host, port) do
+    connect_with_retry(host, port, 1)
+  end
+
+  defp connect_with_retry(host, port, attempt) do
+    # TODO : Tenter :gen_tcp.connect avec les bonnes options
     case :gen_tcp.connect(to_charlist(host), port, [:binary, packet: :line, active: false]) do
-      {:error, reason} ->
-        IO.puts("Erreur de connexion : #{inspect(reason)}")
-        System.halt(1)
+      # TODO : Si {:ok, socket} -> handshake(socket) puis lancer les deux loops
       {:ok, socket} ->
         rencontre(socket)
-        t_recv = Task.async(fn -> receive_loop(socket) end)
-        t_send = Task.async(fn -> send_loop(socket) end)
+        t_recv = Task.async(fn -> receive_loop(socket, host, port) end)
+        _t_send = Task.async(fn -> send_loop(socket) end)
         Task.await(t_recv, :infinity)
-        Task.await(t_send, :infinity)
+      # TODO : Si {:error, reason} ->
+      # TODO :   Afficher "Tentative #{attempt} échouée : #{reason}"
+      # TODO :   Attendre 2 secondes avec :timer.sleep(2000)
+      # TODO :   Rappeler connect_with_retry(host, port, attempt + 1)
+      {:error, reason} ->
+        IO.puts("Tentative #{attempt} échouée : #{reason}")
+        :timer.sleep(2000)
+        connect_with_retry(host, port, attempt + 1)
     end
   end
 
   defp rencontre(socket) do
-    # "Bienvenue sur MiniDiscord!\r\n"
+    # TODO : Lire les messages du serveur avec recv_print(socket)
     recv_print(socket)
-    # "Entre ton pseudo : " reste en buffer (pas de \n)
+    # TODO : Envoyer le pseudo choisi par l'utilisateur avec IO.gets/1
     pseudo = IO.gets("")
     :gen_tcp.send(socket, pseudo)
-    # "Entre ton pseudo : Salons disponibles : ...\r\n" (concaténé car pas de \n sur le prompt)
+    # TODO : Lire la suite (liste des salons)
     recv_print(socket)
-    # "Rejoins un salon (ex: general) : " reste en buffer (pas de \n)
+    # TODO : Envoyer le nom du salon
     salon = IO.gets("")
     :gen_tcp.send(socket, salon)
-    # "Rejoins un salon... Tu es dans #salon\r\n" (concaténé)
+    # TODO : Lire la confirmation
     recv_print(socket)
   end
 
@@ -41,22 +51,31 @@ defmodule MiniDiscord.Client do
     end
   end
 
-  defp receive_loop(socket) do
+  defp receive_loop(socket, host, port) do
     case :gen_tcp.recv(socket, 0) do
+      # TODO : Si {:ok, msg} -> afficher avec IO.write/1 et rappeler receive_loop
       {:ok, msg} ->
         IO.write(msg)
-        receive_loop(socket)
-      {:error, _} ->
-        IO.puts("Déconnecté")
+        receive_loop(socket, host, port)
+      {:error, reason} ->
+        IO.puts("\nConnexion perdue (#{reason}). Reconnexion...")
+        # TODO : Fermer proprement la socket avec :gen_tcp.close/1
+        :gen_tcp.close(socket)
+        # TODO : Rappeler connect_with_retry(host, port, 1)
+        connect_with_retry(host, port, 1)
     end
   end
 
   defp send_loop(socket) do
+    # TODO : Lire depuis le clavier avec IO.gets("")
     case IO.gets("") do
       :eof -> :ok
       msg ->
-        :gen_tcp.send(socket, msg)
-        send_loop(socket)
+        # TODO : Envoyer au serveur avec :gen_tcp.send/2
+        case :gen_tcp.send(socket, msg) do
+          :ok -> send_loop(socket)
+          {:error, _} -> :ok
+        end
     end
   end
 
