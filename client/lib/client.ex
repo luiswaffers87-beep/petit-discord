@@ -35,18 +35,32 @@ defmodule MiniDiscord.Client do
   defp rencontre(socket) do
     # TODO : Lire les messages du serveur avec recv_print(socket)
     recv_print(socket)  # "Bienvenue sur MiniDiscord!"
-    recv_print(socket)  # "Entre ton pseudo :"
     # TODO : Envoyer le pseudo choisi par l'utilisateur avec IO.gets/1
-    pseudo = IO.gets("")
-    :gen_tcp.send(socket, pseudo)
+    # Gère le cas où le pseudo est déjà pris (boucle côté serveur)
+    choisir_pseudo_client(socket)  # "Entre ton pseudo :" + éventuelles erreurs + "Salons disponibles"
     # TODO : Lire la suite (liste des salons)
-    recv_print(socket)  # "Salons disponibles : ..."
     recv_print(socket)  # "Rejoins un salon :"
     # TODO : Envoyer le nom du salon
     salon = IO.gets("")
     :gen_tcp.send(socket, salon)
     # TODO : Lire la confirmation
     recv_print(socket)  # "Tu es dans #salon"
+  end
+
+  defp choisir_pseudo_client(socket) do
+    recv_print(socket)  # "Entre ton pseudo :"
+    pseudo = IO.gets("")
+    :gen_tcp.send(socket, pseudo)
+    # La réponse est soit "Ce pseudo est déjà pris..." soit "Salons disponibles..."
+    case :gen_tcp.recv(socket, 0) do
+      {:ok, msg} ->
+        IO.write(msg)
+        if String.contains?(msg, "déjà pris") do
+          choisir_pseudo_client(socket)
+        end
+      {:error, _} ->
+        IO.puts("Déconnecté")
+    end
   end
 
   defp recv_print(socket) do
