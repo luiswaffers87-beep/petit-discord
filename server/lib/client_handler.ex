@@ -13,7 +13,7 @@ defmodule MiniDiscord.ClientHandler do
 
   defp choisir_salon(socket, pseudo) do
     :gen_tcp.send(socket, "Salons disponibles : #{salons_dispo()}\r\n")
-    :gen_tcp.send(socket, "Rejoins un salon (ex: general) : ")
+    :gen_tcp.send(socket, "Rejoins un salon (ex: general) : \r\n")
     {:ok, salon} = :gen_tcp.recv(socket, 0)
     salon = String.trim(salon)
 
@@ -99,7 +99,7 @@ defmodule MiniDiscord.ClientHandler do
   end
 
   defp choisir_pseudo(socket) do
-    :gen_tcp.send(socket, "Entre ton pseudo : ")
+    :gen_tcp.send(socket, "Entre ton pseudo : \r\n")
     {:ok, pseudo} = :gen_tcp.recv(socket, 0)
     pseudo = String.trim(pseudo)
 # TODO : Si pseudo_disponible?(pseudo) -> reserver_pseudo(pseudo) et retourner pseudo
