@@ -1,5 +1,8 @@
 defmodule MiniDiscord.Client do
 
+  # Clé partagée avec le serveur — 32 octets pour AES-256
+  @cle "MiniDiscordSecretKey1234567890AB"
+
   @doc """
   Point d'entrée principal du client.
   host : nom type 'xxxbore.pub'
@@ -55,7 +58,7 @@ defmodule MiniDiscord.Client do
     case :gen_tcp.recv(socket, 0) do
       # TODO : Si {:ok, msg} -> afficher avec IO.write/1 et rappeler receive_loop
       {:ok, msg} ->
-        IO.write(msg)
+        IO.write(decrypt(msg))
         receive_loop(socket, host, port)
       {:error, reason} ->
         IO.puts("\nConnexion perdue (#{reason}). Reconnexion...")
@@ -74,7 +77,7 @@ defmodule MiniDiscord.Client do
         # TODO : Envoyer au serveur avec :gen_tcp.send/2
         case valider_message(String.trim(msg)) do
           {:ok, _} ->
-            case :gen_tcp.send(socket, msg) do
+            case :gen_tcp.send(socket, encrypt(String.trim(msg))) do
               :ok -> send_loop(socket)
               {:error, _} -> :ok
             end
@@ -85,7 +88,25 @@ defmodule MiniDiscord.Client do
     end
   end
 
+  defp encrypt(msg) do
+    iv = :crypto.strong_rand_bytes(16)
+    chiffre = :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, msg, true)
+    Base.encode64(iv <> chiffre) <> "\r\n"
+  end
+
+  defp decrypt(line) do
+    case Base.decode64(String.trim(line)) do
+      {:ok, <<iv::binary-size(16), chiffre::binary>>} ->
+        :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, chiffre, false)
+      _ ->
+        line
+    end
+  end
+
+  @mots_interdits ~w(spam insulte connard merde puto)
+
   defp valider_message(msg) do
+    msg_lower = String.downcase(msg)
     cond do
       String.length(msg) == 0 ->
         {:error, "Message vide"}
@@ -93,6 +114,8 @@ defmodule MiniDiscord.Client do
         {:error, "Message trop long (max 500 chars)"}
       String.match?(msg, ~r/[\\?<>]/) ->
         {:error, "Caractères interdits"}
+      Enum.any?(@mots_interdits, &String.contains?(msg_lower, &1)) ->
+        {:error, "Message contient un mot interdit"}
       true ->
         {:ok, msg}
     end

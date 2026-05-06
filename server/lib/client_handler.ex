@@ -1,6 +1,9 @@
 defmodule MiniDiscord.ClientHandler do
   require Logger
 
+  # Clé partagée avec le client — 32 octets pour AES-256
+  @cle "MiniDiscordSecretKey1234567890AB"
+
   def start(socket) do
     :gen_tcp.send(socket, "Bienvenue sur MiniDiscord!\r\n")
     pseudo = choisir_pseudo(socket)
@@ -57,19 +60,19 @@ defmodule MiniDiscord.ClientHandler do
   defp loop(socket, pseudo, salon) do
     receive do
       {:message, msg} ->
-        :gen_tcp.send(socket, msg)
+        :gen_tcp.send(socket, encrypt(msg))
       {:historique, historique} ->
-        :gen_tcp.send(socket, "\r\n📜 Historique du salon :\r\n")
+        :gen_tcp.send(socket, encrypt("\r\n📜 Historique du salon :\r\n"))
         Enum.each(Enum.reverse(historique), fn msg ->
-          :gen_tcp.send(socket, msg)
+          :gen_tcp.send(socket, encrypt(msg))
         end)
-        :gen_tcp.send(socket, "\r\n")
+        :gen_tcp.send(socket, encrypt("\r\n"))
     after 0 -> :ok
     end
 
     case :gen_tcp.recv(socket, 0, 100) do
       {:ok, msg} ->
-        msg = String.trim(msg)
+        msg = decrypt(msg)
         if String.starts_with?(msg, "/") do
           gerer_commande(socket, pseudo, salon, msg)
         else
@@ -197,6 +200,21 @@ defmodule MiniDiscord.ClientHandler do
       _ ->
         :gen_tcp.send(socket, "Commande inconnue. Commandes disponibles : /list, /join <salon>, /password <mdp>, /quit\r\n")
         loop(socket, pseudo, salon)
+    end
+  end
+
+  defp encrypt(msg) do
+    iv = :crypto.strong_rand_bytes(16)
+    chiffre = :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, msg, true)
+    Base.encode64(iv <> chiffre) <> "\r\n"
+  end
+
+  defp decrypt(line) do
+    case Base.decode64(String.trim(line)) do
+      {:ok, <<iv::binary-size(16), chiffre::binary>>} ->
+        :crypto.crypto_one_time(:aes_256_ctr, @cle, iv, chiffre, false)
+      _ ->
+        String.trim(line)
     end
   end
 end
