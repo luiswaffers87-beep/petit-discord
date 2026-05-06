@@ -72,10 +72,29 @@ defmodule MiniDiscord.Client do
       :eof -> :ok
       msg ->
         # TODO : Envoyer au serveur avec :gen_tcp.send/2
-        case :gen_tcp.send(socket, msg) do
-          :ok -> send_loop(socket)
-          {:error, _} -> :ok
+        case valider_message(String.trim(msg)) do
+          {:ok, _} ->
+            case :gen_tcp.send(socket, msg) do
+              :ok -> send_loop(socket)
+              {:error, _} -> :ok
+            end
+          {:error, raison} ->
+            IO.puts("Message refusé : #{raison}")
+            send_loop(socket)
         end
+    end
+  end
+
+  defp valider_message(msg) do
+    cond do
+      String.length(msg) == 0 ->
+        {:error, "Message vide"}
+      String.length(msg) > 500 ->
+        {:error, "Message trop long (max 500 chars)"}
+      String.match?(msg, ~r/[\\?<>]/) ->
+        {:error, "Caractères interdits"}
+      true ->
+        {:ok, msg}
     end
   end
 

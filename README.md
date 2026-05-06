@@ -29,3 +29,16 @@ Q5. Quelle est la différence entre les stratégies :one_for_one et :one_for_all
 
 - :one_for_one : Redémarre seulement le processus qui a échoué.
 - :one_for_all : Redémarre tous les enfants du superviseur si l'un d'eux échoue.
+
+
+TP 2 
+
+Robustesse
+
+Que se passe-t-il si le serveur redémarre ou si la connexion est perdue ? 
+
+- Le receive_loop détecte l'erreur de connexion, ferme la socket proprement et appelle connect_with_retry. Le client réessaie toutes les 2 secondes jusqu'à ce que le serveur soit de nouveau disponible. Une fois reconnecté, il refait le handshake complet (pseudo + salon).
+
+Qu'apporterait la gestion du suivi de processus, redémarrage automatique par rapport à votre code ?
+
+- Avec OTP, on pourrait superviser le client lui-même avec un Supervisor. Si le processus client crash (pas juste une déconnexion réseau), il redémarrerait automatiquement sans intervention. Notre code gère uniquement les erreurs réseau avec connect_with_retry, mais un crash inattendu du processus Elixir stopperait tout sans récupération possible.
